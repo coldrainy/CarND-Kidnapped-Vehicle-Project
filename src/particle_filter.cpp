@@ -23,7 +23,7 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
 	//   x, y, theta and their uncertainties from GPS) and all weights to 1.
 	// Add random Gaussian noise to each particle.
 	// NOTE: Consult particle_filter.h for more information about this method (and others in this file).
-    num_particles = 1000;
+    num_particles = 50;
 	std::default_random_engine generator;
     std::normal_distribution<double> dist_x(x, std[0]);
     std::normal_distribution<double> dist_y(y, std[1]);
@@ -38,7 +38,8 @@ void ParticleFilter::init(double x, double y, double theta, double std[]) {
         particles.push_back(particle);
     }
     is_initialized = true;
-    weights.reserve(num_particles);
+    //weights.reserve(num_particles);
+    weights.resize(num_particles);
 }
 
 void ParticleFilter::prediction(double delta_t, double std_pos[], double velocity, double yaw_rate) {
@@ -54,7 +55,8 @@ void ParticleFilter::prediction(double delta_t, double std_pos[], double velocit
         double x = particles[i].x;
         double y = particles[i].y;
         double theta = particles[i].theta;
-        if(fabs(theta)<0.001){
+        //if(fabs(theta)<0.001){
+        if(fabs(yaw_rate)<0.001){
             particles[i].x = x + velocity*cos(theta)*delta_t ;
             particles[i].y = y + velocity*sin(theta)*delta_t ;
             //particles[i].theta = theta + yaw_rate*delta_t ;
@@ -85,7 +87,8 @@ void ParticleFilter::dataAssociation(std::vector<LandmarkObs> predicted, std::ve
             double d = dist(x_obs,y_obs,x_pred,y_pred);
             if(d<min){
                 min = d;
-                observations[i].id = id;
+                //observations[i].id = id;
+                observations[i].id = j;
             }
         }
     }
@@ -125,11 +128,13 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
             }
         }
         std::vector<LandmarkObs> obs;
+        double cos_theta = cos(theta_particle);
+        double sin_theta = sin(theta_particle);
         for(int i=0;i<observations.size();i++){
             double x_obs_car = observations[i].x;
             double y_obs_car = observations[i].y;
-            double x_obs_map = x_particle_map + x_obs_car*cos(theta_particle) - y_obs_car*sin(theta_particle);
-            double y_obs_map = y_particle_map + x_obs_car*sin(theta_particle) + y_obs_car*cos(theta_particle);
+            double x_obs_map = x_particle_map + x_obs_car*cos_theta - y_obs_car*sin_theta;
+            double y_obs_map = y_particle_map + x_obs_car*sin_theta + y_obs_car*cos_theta;
             LandmarkObs ob;
             ob.x = x_obs_map;
             ob.y = y_obs_map;
@@ -142,38 +147,30 @@ void ParticleFilter::updateWeights(double sensor_range, double std_landmark[],
         std::vector<int> associations;
         std::vector<double> sense_x;
         std::vector<double> sense_y;
+        double deno = 1/(2*M_PI*std_landmark[0]*std_landmark[1]);
+        double e1 = 2*std_landmark[0]*std_landmark[0];
+        double e2 = 2*std_landmark[1]*std_landmark[1];
         for(unsigned int i=0;i<obs.size();i++){
             double x_obs_map = obs[i].x;
             double y_obs_map = obs[i].y;
 
             int id = obs[i].id;
-            for(int j=0;j<predicted.size();j++){
-               if(id == predicted[j].id){
-                   double x_landmark_map = predicted[j].x;
-                   double y_landmark_map = predicted[j].y;
-                   double deno = 1/(2*M_PI*std_landmark[0]*std_landmark[1]);
-                   double nume = exp(
-                         -(pow((x_obs_map-x_landmark_map),2)/(2*std_landmark[0]*std_landmark[0])+
-                          pow((y_obs_map-y_landmark_map),2)/(2*std_landmark[1]*std_landmark[1]))
-                          );
-                   double weight_i = nume*deno;
-                   weight *= weight_i;
-                   associations.push_back(id);
-                   sense_x.push_back(x_obs_map);
-                   sense_y.push_back(y_obs_map);
-                   //sense_x.push_back(x_landmark_map);
-                   //sense_y.push_back(y_landmark_map);
-                   break;
-               }
-            }
+            double x_landmark_map = predicted[id].x;
+            double y_landmark_map = predicted[id].y;
+            double nume = exp(
+                  -(pow((x_obs_map-x_landmark_map),2)/(e1)+
+                   pow((y_obs_map-y_landmark_map),2)/(e2))
+                   );
+            double weight_i = nume*deno;
+            weight *= weight_i;
+            associations.push_back(predicted[id].id);
+            sense_x.push_back(x_obs_map);
+            sense_y.push_back(y_obs_map);
         }
         particles[k].weight = weight;
         //sum += particles[k].weight;
         SetAssociations(particles[k],associations,sense_x,sense_y);
-    }
-    for(int i=0;i<num_particles;i++){
-       // particles[i].weight /= sum;
-        weights[i]=particles[i].weight;
+        weights[k]=particles[k].weight;
     }
 }
 

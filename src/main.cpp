@@ -3,7 +3,7 @@
 #include "json.hpp"
 #include <math.h>
 #include "particle_filter.h"
-
+#include <time.h>
 using namespace std;
 
 // for convenience
@@ -46,12 +46,12 @@ int main()
 
   // Create particle filter
   ParticleFilter pf;
-
   h.onMessage([&pf,&map,&delta_t,&sensor_range,&sigma_pos,&sigma_landmark](uWS::WebSocket<uWS::SERVER> ws, char *data, size_t length, uWS::OpCode opCode) {
     // "42" at the start of the message means there's a websocket message event.
     // The 4 signifies a websocket message
     // The 2 signifies a websocket event
 
+  clock_t start_time,end_time1,end_time2,end_time3;
     if (length && length > 2 && data[0] == '4' && data[1] == '2')
     {
 
@@ -66,6 +66,7 @@ int main()
           // j[1] is the data JSON object
 
 
+        start_time = clock();
           if (!pf.initialized()) {
 
           	// Sense noisy position data from the simulator
@@ -82,6 +83,7 @@ int main()
 
 			pf.prediction(delta_t, sigma_pos, previous_velocity, previous_yawrate);
 		  }
+          end_time1 = clock();
 
 		  // receive noisy observation data from the simulator
 		  // sense_observations in JSON format [{obs_x,obs_y},{obs_x,obs_y},...{obs_x,obs_y}]
@@ -113,7 +115,12 @@ int main()
 
 		  // Update the weights and resample
 		  pf.updateWeights(sensor_range, sigma_landmark, noisy_observations, map);
+          end_time2 = clock();
 		  pf.resample();
+          end_time3 = clock();
+          //std::cout<<"prediction time: "<<(double)(end_time1-start_time)/CLOCKS_PER_SEC<<std::endl;
+          //std::cout<<"update time: "<<(double)(end_time2-end_time1)/CLOCKS_PER_SEC<<std::endl;
+          //std::cout<<"prediction time: "<<(double)(end_time3-end_time2)/CLOCKS_PER_SEC<<std::endl;
 
 		  // Calculate and output the average weighted error of the particle filter over all time steps so far.
 		  vector<Particle> particles = pf.particles;
@@ -128,8 +135,8 @@ int main()
 			}
 			weight_sum += particles[i].weight;
 		  }
-		  cout << "highest w " << highest_weight << endl;
-		  cout << "average w " << weight_sum/num_particles << endl;
+		  //cout << "highest w " << highest_weight << endl;
+		  //cout << "average w " << weight_sum/num_particles << endl;
 
           json msgJson;
           msgJson["best_particle_x"] = best_particle.x;
